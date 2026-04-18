@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Habit Tracker Pro</title>
+
+<style>
+  body { font-family: Arial, sans-serif; background:#eef0f4; margin:0; padding:20px; }
+  h1 { text-align:center; }
+
+  .controls {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:10px;
+    margin:10px;
+    flex-wrap:wrap;
+  }
+
+  button {
+    padding:8px 12px;
+    margin:2px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+  }
+
+  .danger { background:#ff3b3b; color:white; }
+  .safe { background:#4caf50; color:white; }
+
+  .month-pill{
+    background:white;
+    padding:8px 14px;
+    border-radius:20px;
+    font-weight:bold;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    min-width:160px;
+    text-align:center;
+  }
+
+  .layout {
+    display:flex;
+    gap:15px;
+    max-width:1100px;
+    margin:auto;
+    align-items:flex-start;
+  }
+
+  .notes-side {
+    flex:1;
+    background:white;
+    padding:10px;
+    border-radius:10px;
+    max-height:700px;
+    overflow:auto;
+  }
+
+  .calendar-wrap {
+    flex:2;
+    padding:15px;
+    border-radius:12px;
+    background-image:url('https://images.unsplash.com/photo-1506784365847-bbad939e9335');
+    background-size:cover;
+    background-position:center;
+  }
+
+  .calendar {
+    display:grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap:5px;
+    margin:20px auto;
+    background:rgba(255,255,255,0.85);
+    padding:10px;
+    border-radius:10px;
+    backdrop-filter: blur(4px);
+  }
+
+  .day {
+    background:rgba(255,255,255,0.9);
+    padding:6px;
+    text-align:center;
+    border-radius:10px;
+    cursor:pointer;
+    min-height:85px;
+    font-size:13px;
+    position:relative;
+  }
+
+  .today { border:2px solid #ff9800; }
+
+  .predicted {
+    border:2px dashed #ff5722;
+    background:rgba(255,87,34,0.1);
+  }
+
+  .emoji { display:block; margin-top:5px; }
+
+  .day-note {
+    width:100%;
+    font-size:10px;
+    margin-top:4px;
+  }
+
+  .history-item, .note-item {
+    font-size:13px;
+    padding:6px;
+    border-bottom:1px solid #eee;
+  }
+
+  .total-box{text-align:center;margin-bottom:10px;}
+  .total-num{font-size:28px;font-weight:bold;color:#4caf50;}
+
+  .delete-btn{
+    float:right;
+    border:none;
+    background:red;
+    color:white;
+    border-radius:5px;
+    cursor:pointer;
+    padding:2px 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>📅 Habit Tracker Pro</h1>
+
+<div class="controls">
+  <button onclick="changeMonth(-1)">⬅ Prev</button>
+  <div id="monthLabel" class="month-pill"></div>
+  <button onclick="changeMonth(1)">Next ➡</button>
+</div>
+
+<div class="layout">
+
+  <div class="notes-side">
+    <div class="total-box">
+      <div id="totalCount" class="total-num">0</div>
+      <div style="color:#666">Total Habit Count</div>
+    </div>
+
+    <h3>📝 Notes</h3>
+    <div id="notes"></div>
+
+    <h3 style="margin-top:15px">📊 Monthly History</h3>
+    <div id="history"></div>
+
+    <h3 style="margin-top:15px">🔁 Recurring Days</h3>
+    <div id="recurrence"></div>
+
+  </div>
+<button onclick="testReminder()">Test Reminder</button>
+  <div class="calendar-wrap">
+    <div id="main"></div>
+  </div>
+
+</div>
+
+<script>
+let currentDate=new Date();
+let marks=JSON.parse(localStorage.getItem('marks')||'{}');
+
+function save(){
+  localStorage.setItem('marks',JSON.stringify(marks));
+}
+
+function getTotal(){
+  let t=0;
+  for(let k in marks){
+    if(marks[k].emoji) t++;
+  }
+  return t;
+}
+
+function renderTotal(){
+  document.getElementById('totalCount').innerText=getTotal();
+}
+
+function toggle(date){
+  if(!marks[date]) marks[date]={emoji:'🚫',note:''};
+  marks[date].emoji = marks[date].emoji ? '' : '🚫';
+  save(); render();
+}
+
+function updateNote(date,val){
+  if(!marks[date]) marks[date]={emoji:'',note:''};
+  marks[date].note=val;
+  save(); render();
+}
+
+function deleteNote(date){
+  if(marks[date]){
+    marks[date].note='';
+    save(); render();
+  }
+}
+
+function changeMonth(o){
+  currentDate.setMonth(currentDate.getMonth()+o);
+  render();
+}
+
+function getHistory(){
+  let map={};
+  for(let k in marks){
+    if(marks[k].emoji){
+      let d=new Date(k);
+      let key=`${d.getFullYear()}-${d.getMonth()+1}`;
+      if(!map[key]) map[key]={count:0,days:[]};
+      map[key].count++;
+      map[key].days.push(d.getDate());
+    }
+  }
+  return map;
+}
+
+function getRecurrence(){
+  let map={};
+  const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  for(let k in marks){
+    if(marks[k].emoji){
+      let d=new Date(k);
+      let day=d.getDate();
+      let label=months[d.getMonth()] + " " + d.getFullYear();
+
+      if(!map[day]) map[day]=[];
+      map[day].push(label);
+    }
+  }
+
+  return map;
+}
+
+function getPredictedDays(){
+  let r=getRecurrence();
+  let set=new Set();
+
+  for(let day in r){
+    let unique=[...new Set(r[day])];
+    if(unique.length>=2){
+      set.add(parseInt(day));
+    }
+  }
+
+  return set;
+}
+
+function renderRecurrence(){
+  let r=getRecurrence();
+
+  document.getElementById('recurrence').innerHTML=
+  Object.keys(r).sort((a,b)=>a-b).map(day=>{
+    let unique=[...new Set(r[day])];
+    if(unique.length<2) return "";
+    return `<div class='note-item'><b>${day}</b> → ${unique.join(', ')}</div>`;
+  }).join('');
+}
+
+const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function formatDate(key){
+  let [y,m,d]=key.split('-');
+  return `${months[parseInt(m)-1]} ${d}`;
+}
+
+function renderHistory(){
+  let h=getHistory();
+
+  document.getElementById('history').innerHTML=
+  Object.entries(h).sort((a,b)=>b[0].localeCompare(a[0])).map(([k,v])=>{
+    let [y,m]=k.split('-');
+    let label=months[m-1]+" "+y;
+    let days=[...new Set(v.days)].sort((a,b)=>a-b);
+    return `<div class='history-item'><b>${label}</b> → ${v.count}, ${days.join(', ')}</div>`;
+  }).join('');
+}
+
+function renderNotes(){
+  let html="";
+  for(let k in marks){
+    if(marks[k].note){
+      html+=`<div class='note-item'>${formatDate(k)} → ${marks[k].note}
+      <button class='delete-btn' onclick="deleteNote('${k}')">×</button>
+      </div>`;
+    }
+  }
+  document.getElementById('notes').innerHTML=html;
+}
+
+function render(){
+  renderTotal();
+  renderHistory();
+  renderNotes();
+  renderRecurrence();
+
+  let predicted=getPredictedDays();
+
+  let label=currentDate.toLocaleString('default',{month:'long',year:'numeric'});
+  document.getElementById('monthLabel').innerText=label;
+
+  let y=currentDate.getFullYear();
+  let m=currentDate.getMonth();
+
+  let cal=document.createElement('div');
+  cal.className='calendar';
+
+  let first=new Date(y,m,1).getDay();
+  let days=new Date(y,m+1,0).getDate();
+
+  let today=new Date();
+  let todayKey=`${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+
+  for(let i=0;i<first;i++) cal.appendChild(document.createElement('div'));
+
+  for(let i=1;i<=days;i++){
+    let key=`${y}-${m+1}-${i}`;
+    let d=document.createElement('div');
+    d.className='day';
+
+    if(key===todayKey) d.classList.add('today');
+    if(predicted.has(i)) d.classList.add('predicted');
+
+    d.innerHTML=i+(marks[key]?.emoji?"<div class='emoji'>🚫</div>":"");
+
+    d.onclick=()=>toggle(key);
+
+    let input=document.createElement('input');
+    input.className='day-note';
+    input.value=marks[key]?.note||'';
+    input.onchange=e=>updateNote(key,e.target.value);
+    input.onclick=e=>e.stopPropagation();
+
+    d.appendChild(input);
+    cal.appendChild(d);
+  }
+
+  document.getElementById('main').innerHTML='';
+  document.getElementById('main').appendChild(cal);
+}
+
+render();
+
+function testReminder(){
+  sendToServer("Test Reminder from App", new Date().toISOString());
+}
+</script>
+</body>
+</html>
